@@ -1,5 +1,6 @@
 ﻿using FluentAssertions;
 using LibraryManagementSystem.DataDbContext;
+using LibraryManagementSystem.Entities.DTOs;
 using LibraryManagementSystem.Entities.Models;
 using LibraryManagementSystem.Repository.Service;
 using Microsoft.EntityFrameworkCore;
@@ -65,5 +66,28 @@ public class LibraryServiceTest
         var library = response.Data.First();
         library.LibraryName.Should().Be("Central Library");
         library.Location.Should().Be("Downtown");
+    }
+
+    [Fact(DisplayName = "New_Library_Creation_Be_Failed")]
+    public async Task New_Library_Creation_Be_Failed()
+    {
+        // Arrange
+        var db = CreateDbContext();
+        var service = CreateService(db);
+
+        var dto = new CreateLibraryDto
+        {
+            LibraryName = "City Library",
+            Location = "Uptown",
+            ContactNo = "0987654321",
+            UserId = "" // invalid user ID
+        };
+
+        // Act
+        var response = await service.CreateLibraryAsync(dto, CancellationToken.None);
+
+        // Assert
+        response.Status.Should().BeFalse();
+        response.Message.Should().Contain("Failed to create library");
     }
 }
