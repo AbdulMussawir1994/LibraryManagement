@@ -3,6 +3,7 @@ using LibraryManagementSystem.Entities.DTOs;
 using LibraryManagementSystem.Entities.Models;
 using LibraryManagementSystem.Repository.Service;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Moq;
@@ -176,5 +177,68 @@ public class UserRepositoryTest
 
         Assert.False(response.Status);
         Assert.Equal("Username is already registered.", response.Message);
+    }
+}
+
+public class UserServiceXTests
+{
+    private readonly Mock<UserManager<AppUser>> _userManagerMock;
+    private readonly IConfiguration _config;
+    private readonly LibraryDbContext _db;
+
+    public UserServiceXTests()
+    {
+        var store = new Mock<IUserStore<AppUser>>();
+        _userManagerMock = new Mock<UserManager<AppUser>>(
+            store.Object, null, null, null, null, null, null, null, null);
+
+        var settings = new Dictionary<string, string>
+        {
+            {"JWTKey:Secret", "ThisIsAStrongSecretKey12345"},
+            {"JWTKey:ValidIssuer", "TestIssuer"},
+            {"JWTKey:ValidAudience", "TestAudience"},
+            {"JWTKey:TokenExpiryTimeInMinutes", "30"}
+        };
+
+        _config = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+
+        var options = new DbContextOptionsBuilder<LibraryDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        _db = new LibraryDbContext(options);
+        _db.Database.EnsureCreated();
+    }
+
+    private UserService CreateService() =>
+        new UserService(_userManagerMock.Object, _config, _db);
+
+    [Fact]
+    public async Task Register_ShouldSuccess_WhenValid()
+    {
+        _userManagerMock.Setup(x => x.FindByEmailAsync(It.IsAny<string>()))
+            .ReturnsAsync((AppUser)null);
+
+        _userManagerMock.Setup(x => x.FindByNameAsync(It.IsAny<string>()))
+            .ReturnsAsync((AppUser)null);
+
+        _userManagerMock.Setup(x => x.CreateAsync(It.IsAny<AppUser>(), It.IsAny<string>()))
+            .ReturnsAsync(IdentityResult.Success);
+
+        var service = CreateService();
+
+        var response = await service.RegisterUserAsync(
+            new RegisterViewModelDto
+            {
+                Username = "testuser",
+                Email = "user@mail.com",
+                Password = "P@ss123"
+            }, CancellationToken.None);
+
+        Assert.True(response.Status);
+        Assert.Equal("Register successful.", response.Message);
     }
 }

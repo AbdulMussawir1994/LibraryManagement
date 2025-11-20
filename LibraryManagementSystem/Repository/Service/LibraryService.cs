@@ -55,6 +55,11 @@ public class LibraryService : ILibraryService
             AppUserId = dto.UserId,
         };
 
+        var checkUserId = await _db.Users.AsNoTracking().AnyAsync(u => u.Id == dto.UserId, cancellationToken);
+
+        if (!checkUserId)
+            return MobileResponse<LibraryDto>.Fail("User not found for the provided UserId.", "ERROR-404");
+
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
         try

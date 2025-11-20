@@ -3,6 +3,7 @@ using LibraryManagementSystem.DataDbContext;
 using LibraryManagementSystem.Entities.DTOs;
 using LibraryManagementSystem.Entities.Models;
 using LibraryManagementSystem.Repository.Service;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace XUnitTesting;
@@ -67,27 +68,57 @@ public class LibraryServiceTest
         library.LibraryName.Should().Be("Central Library");
         library.Location.Should().Be("Downtown");
     }
+}
 
-    [Fact(DisplayName = "New_Library_Creation_Be_Failed")]
-    public async Task New_Library_Creation_Be_Failed()
+public class LibraryServiceTestForCreate
+{
+    private LibraryDbContext CreateDbContext()
+    {
+        var connection = new SqliteConnection("Filename=:memory:");
+        connection.Open();
+
+        // Enable foreign key constraints in SQLite
+        var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA foreign_keys = ON;";
+        command.ExecuteNonQuery();
+
+        var options = new DbContextOptionsBuilder<LibraryDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        var db = new LibraryDbContext(options);
+        db.Database.EnsureCreated();   // Creates tables & relationships
+
+        return db;
+    }
+
+    private LibraryService CreateService(LibraryDbContext db)
+        => new LibraryService(db);
+
+
+    [Fact(DisplayName = "New_Library_Creation_Be_Failed_WhenUserIdIsInvalid")]
+    public async Task New_Library_Creation_Successful()
     {
         // Arrange
-        var db = CreateDbContext();
+        using var db = CreateDbContext();
         var service = CreateService(db);
+
+        db.Users.Add(new AppUser { Id = "user-123", UserName = "TestUser" });
+        await db.SaveChangesAsync();
 
         var dto = new CreateLibraryDto
         {
             LibraryName = "City Library",
             Location = "Uptown",
             ContactNo = "0987654321",
-            UserId = "" // invalid user ID
+            UserId = "user-123"
         };
 
         // Act
         var response = await service.CreateLibraryAsync(dto, CancellationToken.None);
 
         // Assert
-        response.Status.Should().BeFalse();
-        response.Message.Should().Contain("Failed to create library");
+        response.Status.Should().BeTrue();
+        response.Message.Should().Be("Library created successfully.");
     }
 }
